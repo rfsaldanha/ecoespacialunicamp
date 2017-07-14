@@ -1,0 +1,297 @@
+---
+title: "Econometria espacial com R - Aula 05"
+author: "Raphael Saldanha, Eduardo Almeida"
+subtitle: Unicamp, julho de 2017
+output:
+  pdf_document: default
+  html_notebook: default
+  html_document: default
+---
+
+# Probit e Tobit espacial
+
+## Pacotes
+
+```{r}
+library(McSpatial)
+```
+
+## Shapefile
+
+```{r}
+# Pacotes
+library(rgdal)
+
+lula.shp <- readOGR("data", "lula2002", encoding = "ISO-8859-1")
+```
+
+## Variável de resposta
+
+Para estes tipos de modelo, precisamos ter ou criar uma variável dicotômica para ser a variável de resposta do modelo.
+
+```{r}
+lula.shp@data$VITORIA <- lula.shp@data$PT > lula.shp@data$PPS & lula.shp@data$PSB & lula.shp@data$ PSDB
+table(lula.shp@data$VITORIA)
+```
+
+## Matriz de vizinhança
+
+Para usar o pacote `McSpatial`, a matriz de vizinhança precisa ser criada através de um comando do próprio pacote, não podendo ser usada diretamente as matrizes que criamos com o pacote `spdep`. Abaixo, alguns exemplos de matrizes com este pacote. Vamos usar a última nos exemplos.
+
+```{r}
+# Matriz de pesos espaciais tipo "Queen"
+wmat <- makew(lula.shp)$wmat
+
+# Matriz de pesos espaciais tipo "Rook"
+wmat <- makew(lula.shp, method="rook")$wmat
+
+# Matriz de pesos espaciais tipo k-vizinhos
+wmat <- makew(lula.shp, method="knear", knum=1)$wmat
+```
+
+## Especificação
+
+```{r}
+esp <- VITORIA ~ F1N + F2N + F3N + F4N
+```
+
+## Logit espacial
+
+```{r}
+fit1 <- splogit(form = esp, data = lula.shp@data, wmat = wmat)
+```
+
+A especificação dos instrumentos envolve, por default, tanto $X$ quanto $WX$ . Para mudar esta especificação, você pode listar quais variáveis devem ser ponderadas pela matriz de pesos espaciais com o argumento `winst`, quais variáveis não devem ser ponderadas com o argumento `inst`, ou usando ambos os argumentos. Saiba mais sobre os efeitos destas combinações com `?splogit`, em Details.
+
+## Probit espacial
+
+### Estimado por GMM
+
+```{r}
+fit2 <- spprobit(form = esp, data = lula.shp@data, wmat = wmat)
+```
+
+### Estimado por ML
+
+Rodar em casa com tempo ;-)
+
+```{r}
+fit3 <- spprobitml(form = esp, data = lula.shp@data, wmat = wmat)
+```
+
+# Painel espacial
+
+Para iniciarmos nossos painéis espaciais, pode ser interessante abrir espaço na memória do computador. Para apagar todos os objetos, use o comando abaixo.
+
+## Limpando a memória
+
+```{r}
+rm(list = ls())
+```
+
+## Pacotes
+
+O pacote `plm` é responsável pelos painéis convencionais (não espaciais) que usaremos para comparação. O pacote `splm` é responsável pelos painéis espaciais. Os autores do pacote lançaram um artigo sobre ele neste [link](https://www.jstatsoft.org/article/view/v047i01/v47i01.pdf).
+
+```{r}
+library(plm)
+library(splm)
+```
+
+## Shapefile
+
+Vamos usar um shapefile de estados brasileiros com dados sobre criminalidade.
+
+```{r}
+# Pacotes
+library(rgdal)
+
+crime.shp <- readOGR("data", "Crime_UF3", encoding = "ISO-8859-1")
+
+# Plotar o mapa
+plot(crime.shp)
+```
+
+## Dados
+
+Uma olhada nos dados.
+
+```{r}
+str(crime.shp@data)
+head(crime.shp@data)
+```
+
+Veja que ele já tem algumas variáveis defasadas espacialmente. 
+
+## Matriz de vizinhança
+
+Para rodar os paineis espaciais, vamos precisar de uma matriz de vizinhança.
+
+```{r}
+w1 <- nb2listw(poly2nb(crime.shp, queen = TRUE))
+summary(w1)
+```
+
+## Variáveis defasadas espacialmente
+
+Caso queira criar outras variáveis defasadas espacialmente, use o seguinte comando.
+
+```{r}
+crime.shp@data$lag_IDHMR91 <- lag.listw(w1, crime.shp@data$IDHMR91)
+```
+
+Para criar variáveis defasadas por uma matriz $W$, use o seguinte comando.
+
+## Empilhar dados
+
+Para empilhar os dados de modo automático, vamos precisar que a base de dados tenha uma organização básica.
+
+* O primeiro campo deve ser o de identificação;
+* Os nomes das variáveis devem conter a especificação da variável e o ano, algo como "PIB2000" e "PIB2010".
+* Não devem existir outras variáveis além da identificação e dados do painel.
+
+Vejamos a base de dados do exemplo.
+
+```{r}
+dados <- crime.shp@data
+names(dados)
+```
+
+Primeiro, vamos retirar as variáveis que não precisamos, como as de nome da UF.
+
+```{r}
+dados$NAME2_ <- NULL
+dados$UF <- NULL
+```
+
+
+Vamos organizar os nomes das variáveis. Neste exemplo, entendi que 99 irá percenter no painel como se fosse 1991.
+
+```{r}
+names(dados) <- c("coduf", "IGINI91", "IGINI00", "IDHMR91", "IDHMR00", "IDHNM91", "IDHNM00", "TURB91", "TURB00", "RPC91", "RPC00", "FVT91", "FVT00", "W_FVT91", "W_FVT00", "W_GINI91", "W_GINI00", "W_IDHR91", "W_IDHR00", "W_IDH91", "W_IDH00", "W_TURB91", "W_TURB00","W_RPC91", "W_RPC00")
+```
+
+Para colocar os dados em painel, criamos uma função. Veja abaixo.
+
+```{r}
+painel <- function(id, dados){
+  require(reshape2)
+  
+  dadosp <- reshape2::melt(dados, id=id)
+  dadosp$varname <- as.character(gsub("[[:digit:]]", "", dadosp$variable))
+  dadosp$year <-  as.character(gsub("[[:alpha:]]", "", dadosp$variable))
+  
+  sp <- split(dadosp, f = dadosp$varname)
+  
+  dadosp <- data.frame(sp[[1]][,1], sp[[1]]$year)
+  
+  for(i in 1:length(sp)){
+    dadosp <- cbind(dadosp, sp[[i]]$value)
+  }
+  
+  names(dadosp) <- c("id","ano",names(sp)) 
+  
+  return(dadosp)
+}
+```
+
+Depois de declarada, vamos colocar os dados em painel.
+
+```{r}
+dadosp <- painel("coduf", dados)
+View(dadosp)
+```
+
+## Especificação do modelo
+
+```{r}
+esp <- FVT ~ IDHMR + IGINI + RPC + TURB
+```
+
+## Modelo não espacial de efeitos fixos
+
+```{r}
+fe <- plm(esp, data=dadosp)
+```
+
+## Modelo não espacial de efeitos aleatórios
+
+```{r}
+re <- plm(esp, data=dadosp, model="random")
+```
+
+## Teste de Hausman
+
+```{r}
+ph <- phtest(fe, re) # H0: efeitos aleatórios
+print(ph)
+```
+
+## Teste Pesaran CD (cross-section dependence)
+
+```{r}
+cd <- pcdtest(esp, data=dadosp) # H0: ausência de dependência CS
+print(cd)
+```
+
+## Modelo OLS
+
+```{r}
+modOLS <- plm(esp, data=dadosp)
+summary(modOLS)
+```
+
+## SAR
+
+```{r}
+modSAR <- spml(esp, data=dadosp, listw=w1, lag=TRUE, model="within", effect="individual", spatial.error="none")
+summary(modSAR)
+impSAR <- impacts(modSAR, listw=w1, time=2)
+summary(impSAR, zstats=TRUE, short=TRUE)
+```
+
+## SEM
+
+```{r}
+modSEM <- spml(esp, data=dadosp, listw=w1, lag=FALSE, model="within", effect="individual", spatial.error="b")
+summary(modSEM)
+```
+
+## SAC
+
+```{r}
+modSAC <- spml(esp, data=dadosp, listw=w1, lag=TRUE, model="within", effect="individual", spatial.error="b")
+summary(modSAC)
+impSAC <- impacts(modSAC, listw=w1, time=2)
+summary(impSAC, zstats=TRUE, short=TRUE)
+```
+
+## Especificação com lag
+
+```{r}
+esp_lag <- FVT ~ W_IDHR + W_GINI + W_RPC + W_TURB
+```
+
+## SDM
+
+```{r}
+modSDM <- spml(esp_lag, data=dadosp, listw=w1, lag=TRUE, model="within", effect="individual", spatial.error="none")
+summary(modSDM)
+impSDM <- impacts(modSDM, listw=w1, time=12)
+summary(impSDM, zstats=TRUE, short=TRUE)
+```
+
+## SDEM
+
+```{r}
+modSDEM <- spml(esp_lag, data=dadosp, listw=w1, lag=FALSE, model="within", effect="individual", spatial.error="b")
+summary(modSDEM)
+```
+
+## SLX
+
+```{r}
+modSLX <- plm(esp_lag, data=dadosp)
+summary(modSLX)
+```
+
