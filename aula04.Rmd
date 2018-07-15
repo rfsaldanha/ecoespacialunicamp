@@ -1,14 +1,14 @@
 ---
 title: "Econometria espacial com R - Aula 04"
 author: "Raphael Saldanha, Eduardo Almeida"
-subtitle: Unicamp, julho de 2017
+subtitle: Unicamp, julho de 2018
 output:
-  pdf_document: default
-  html_notebook: default
   html_document: default
+  html_notebook: default
+  pdf_document: default
 ---
 
-# Regressão ponderada geograficamente
+# Regressão ponderada geograficamente (GWR)
 
 ## Pacote
 

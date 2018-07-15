@@ -1,11 +1,11 @@
 ---
 title: "Econometria espacial com R - Aula 05"
 author: "Raphael Saldanha, Eduardo Almeida"
-subtitle: Unicamp, julho de 2017
+subtitle: Unicamp, julho de 2018
 output:
-  pdf_document: default
-  html_notebook: default
   html_document: default
+  html_notebook: default
+  pdf_document: default
 ---
 
 # Probit e Tobit espacial
@@ -140,7 +140,6 @@ Caso queira criar outras variáveis defasadas espacialmente, use o seguinte coma
 crime.shp@data$lag_IDHMR91 <- lag.listw(w1, crime.shp@data$IDHMR91)
 ```
 
-Para criar variáveis defasadas por uma matriz $W$, use o seguinte comando.
 
 ## Empilhar dados
 
@@ -241,6 +240,7 @@ modOLS <- plm(esp, data=dadosp)
 summary(modOLS)
 ```
 
+
 ## SAR
 
 ```{r}
@@ -291,7 +291,49 @@ summary(modSDEM)
 ## SLX
 
 ```{r}
-modSLX <- plm(esp_lag, data=dadosp)
+modSLX <- plm(esp_lag, data=dadosp, model = "within", spatial.error = "none", lag = FALSE)
 summary(modSLX)
+```
+
+## AIC e BIC
+
+Para o cálculo do AIC e BIC, precisamos do valor de logLik das estimações, contudo o pacote `splm` na versão atual tem um erro. Apesar dele calcular o logLik, ele não salva! Vamos então modificar a função no pacote para corrigir este problema.
+
+Precisamos incluir o seguinte na função `return`: ll=LL
+
+Para modificar a função, use o seguinte comando: `fixInNamespace("sperrorlm", "splm")`
+
+Agora precisamos estimar novamente os modelos.
+
+```{r}
+modSAR <- spml(esp, data=dadosp, listw=w1, lag=TRUE, model="within", effect="individual", spatial.error="none")
+modSEM <- spml(esp, data=dadosp, listw=w1, lag=FALSE, model="within", effect="individual", spatial.error="b")
+modSAC <- spml(esp, data=dadosp, listw=w1, lag=TRUE, model="within", effect="individual", spatial.error="b")
+modSDM <- spml(esp_lag, data=dadosp, listw=w1, lag=TRUE, model="within", effect="individual", spatial.error="none")
+modSDEM <- spml(esp_lag, data=dadosp, listw=w1, lag=FALSE, model="within", effect="individual", spatial.error="b")
+```
+
+Para vericar o logLik de um modelo, use o seguinte:
+
+```{r}
+modSEM$logLik
+```
+
+Para cálcularmos o AIC e BIC, vamos precisar de uma função criada pelo Prof. Reinhold Kosfeld. 
+
+```{r}
+source("AICsplm.R")
+```
+
+### BIC
+
+```{r}
+#AICsplm(modSEM, criterion = "BIC")
+```
+
+### AIC
+
+```{r}
+#AICsplm(modSEM, criterion = "AIC")
 ```
 

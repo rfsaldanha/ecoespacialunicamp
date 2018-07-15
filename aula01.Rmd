@@ -1,11 +1,11 @@
 ---
 title: "Econometria espacial com R - Aula 01"
 author: "Raphael Saldanha, Eduardo Almeida"
-subtitle: Unicamp, julho de 2017
+subtitle: Unicamp, julho de 2018
 output:
-  pdf_document: default
-  html_notebook: default
   html_document: default
+  html_notebook: default
+  pdf_document: default
 ---
 
 # Introdução ao R
@@ -184,7 +184,7 @@ Existem diversos pacotes para ler aquivos de banco de dados no R, como DBF, SAV,
 
 ## Arquivos CSV
 
-Para importar este arquivo CSV no \textsl{R}, teste o código abaixo. Se não funcionar, tente trocar "/" por "\\".
+Para importar este arquivo CSV no R, teste o código abaixo. Se não funcionar, tente trocar "/" por "\\".
 
 ```{r}
 # Importar o arquivo 'notas.csv'
