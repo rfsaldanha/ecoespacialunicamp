@@ -1,2 +1,2 @@
 # ecoespacialunicamp
-Econometria Espacial Unicamp 2017
+Econometria Espacial Unicamp
