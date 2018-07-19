@@ -179,11 +179,4 @@ LR.sarlm(mod1.sdm, mod1.mcrl)
 LR.sarlm(mod1.sdem, mod1.mcrl)
 ```
 
-## Teste de Hausman (para erro)
-
-```{r}
-Hausman.test(mod1.sem)
-Hausman.test(mod1.sdem)
-```
-
 
