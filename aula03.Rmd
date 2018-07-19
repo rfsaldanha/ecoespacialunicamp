@@ -68,8 +68,8 @@ esp2 <- VPP ~ LP + KP + R_P
 $y = \alpha + X\beta + \varepsilon$
 
 ```{r}
-mod1 <- lm(formula = esp1, data = fp_mg.shp@data)
-summary(mod1)
+mod1.mcrl <- lm(formula = esp1, data = fp_mg.shp@data)
+summary(mod1.mcrl)
 ```
 
 ## Multiplicador de Lagrange
@@ -164,6 +164,26 @@ $y = X \beta + u \\ u = \lambda W \varepsilon + \varepsilon$
 ```{r}
 mod1.sma <- spautolm(formula = esp1, data = fp_mg.shp@data, listw = w1, family = "SMA")
 summary(mod1.sma)
+```
+
+# Testes
+
+## Teste de razão de MV
+
+```{r}
+mod1.sar.mixed <- lagsarlm(formula = esp1, data = fp_mg.shp@data, listw = w1, type = "mixed")
+mod1.sem <- errorsarlm(formula = esp1, data = fp_mg.shp@data, listw = w1)
+
+LR.sarlm(mod1.sar.mixed, mod1.sem)
+LR.sarlm(mod1.sdm, mod1.mcrl)
+LR.sarlm(mod1.sdem, mod1.mcrl)
+```
+
+## Teste de Hausman (para erro)
+
+```{r}
+Hausman.test(mod1.sem)
+Hausman.test(mod1.sdem)
 ```
 
 
