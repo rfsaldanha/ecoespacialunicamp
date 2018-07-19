@@ -269,7 +269,7 @@ summary(impSAC, zstats=TRUE, short=TRUE)
 ## Especificação com lag
 
 ```{r}
-esp_lag <- FVT ~ W_IDHR + W_GINI + W_RPC + W_TURB
+esp_lag <- FVT ~ IDHMR + IGINI + RPC + TURB + W_IDHR + W_GINI + W_RPC + W_TURB
 ```
 
 ## SDM
@@ -311,10 +311,10 @@ modSAC <- spml(esp, data=dadosp, listw=w1, lag=TRUE, model="within", effect="ind
 modSAC$logLik <- -316.7003
 
 modSDM <- spml(esp_lag, data=dadosp, listw=w1, lag=TRUE, model="within", effect="individual", spatial.error="none", quiet = FALSE)
-modSDM$logLik <- -334.774
+modSDM$logLik <- -324.5894
 
 modSDEM <- spml(esp_lag, data=dadosp, listw=w1, lag=FALSE, model="within", effect="individual", spatial.error="b", quiet = FALSE)
-modSDEM$logLik <- -334.7915
+modSDEM$logLik <- -324.8616
 ```
 
 
@@ -322,7 +322,6 @@ Para cálcularmos o AIC e BIC, vamos precisar de uma função criada pelo Prof. 
 
 ```{r}
 source("AICsplm.R")
-source("AICplm.R")
 ```
 
 ### BIC
@@ -343,6 +342,5 @@ AICsplm(modSEM, criterion = "AIC")
 AICsplm(modSAC, criterion = "AIC")
 AICsplm(modSDM, criterion = "AIC")
 AICsplm(modSDEM, criterion = "AIC")
-AICplm(modSLX)
 ```
 
