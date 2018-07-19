@@ -24,23 +24,43 @@ library(spdep)
 library(rgdal)
 
 # Abra o arquivo 'gm10.shp'
-fp_mg.shp <- readOGR("data", "FP_MG", encoding = "ISO-8859-1")
+fp_mg.shp <- readOGR("data", "FP_MG", encoding = "UTF-8")
 
 # Plotar o mapa
 plot(fp_mg.shp)
 ```
 
+```{r}
+library(leaflet)
+library(RColorBrewer)
+library(htmltools)
+
+qpal<-colorQuantile("OrRd", fp_mg.shp@data$VPP, n=5) 
+
+leaflet(fp_mg.shp) %>%
+  addPolygons(stroke = FALSE, fillOpacity = .8, smoothFactor = 0.2,
+              fillColor = ~qpal(VPP), popup = ~htmlEscape(NOMMIC),
+              highlight = highlightOptions(fillOpacity = 0.5,
+                                           bringToFront = TRUE)) %>%
+  addTiles()
+```
+
+
+
 ## Matriz de vizinhança
 
 ```{r}
 w1 <- nb2listw(poly2nb(fp_mg.shp, queen = TRUE))
+W <- as(w1, "CsparseMatrix")
+trMat <- trW(W, type="mult")
 ```
 
 
 ## Especificação do modelo
 
 ```{r}
-esp <- Q ~ AC + LP
+esp1 <- VPP ~ LP + KP + ACP
+esp2 <- VPP ~ LP + KP + R_P
 ```
 
 ## OLS
@@ -48,7 +68,7 @@ esp <- Q ~ AC + LP
 $y = \alpha + X\beta + \varepsilon$
 
 ```{r}
-mod1 <- lm(formula = esp, data = fp_mg.shp@data)
+mod1 <- lm(formula = esp1, data = fp_mg.shp@data)
 summary(mod1)
 ```
 
@@ -61,83 +81,89 @@ mod1.lagrange <- lm.LMtests(model = mod1, listw = w1,
 mod1.lagrange
 ```
 
-## SAR
+## SAR (MV)
 
 $y = \rho W y + X \beta + \varepsilon$
 
 ```{r}
-mod1.sar <- lagsarlm(formula = esp, data = fp_mg.shp@data, listw = w1)
+mod1.sar <- lagsarlm(formula = esp1, data = fp_mg.shp@data, listw = w1)
 summary(mod1.sar)
-impacts(mod1.sar, listw = w1)
+summary(impacts(mod1.sar, tr=trMat, R=1000), zstats=TRUE, short=TRUE)
 ```
 
-## SEM
+## SEM (MV)
 
 $y = X \beta + u \\ u = \lambda Wu + \varepsilon$
 
 ```{r}
-mod1.sem <- errorsarlm(formula = esp, data = fp_mg.shp@data, listw = w1)
+mod1.sem <- errorsarlm(formula = esp1, data = fp_mg.shp@data, listw = w1)
 summary(mod1.sem)
 ```
 
+## SEM (GMM)
+
 ```{r}
-mod1.semGMM <- GMerrorsar(formula = esp, data = fp_mg.shp@data, listw = w1)
+mod1.semGMM <- GMerrorsar(formula = esp1, data = fp_mg.shp@data, listw = w1)
 summary(mod1.semGMM)
 ```
 
 
-## SAC
+## SAC (MV)
 
 $y = \rho Wy + X \beta + u \\ u = \lambda Wu + \varepsilon$
 
 ```{r}
-mod1.sac <- sacsarlm(formula = esp, data = fp_mg.shp@data, listw = w1)
+mod1.sac <- sacsarlm(formula = esp1, data = fp_mg.shp@data, listw = w1)
 summary(mod1.sac)
-impacts(mod1.sac, listw = w1)
+summary(impacts(mod1.sac, tr=trMat, R=1000), zstats=TRUE, short=TRUE)
 ```
 
+## SAC (GMM)
+
 ```{r}
-mod1.sacGMM <- gstsls(formula = esp, data = fp_mg.shp@data, listw = w1)
+mod1.sacGMM <- gstsls(formula = esp1, data = fp_mg.shp@data, listw = w1)
 summary(mod1.sacGMM)
-impacts(mod1.sacGMM, listw = w1)
+summary(impacts(mod1.sacGMM, tr=trMat, R=1000), zstats=TRUE, short=TRUE)
 ```
 
 
-## SMA
 
-$y = X \beta + u \\ u = \lambda W \varepsilon + \varepsilon$
-
-```{r}
-mod1.sma <- spautolm(formula = esp, data = fp_mg.shp@data, listw = w1, family = "SMA")
-summary(mod1.sma)
-```
-
-## SLX
+## SLX (MV)
 
 $y = X \beta + WX \theta + \varepsilon$
 
 ```{r}
-mod1.slx <- lmSLX(formula = esp, data = fp_mg.shp@data, listw = w1)
+mod1.slx <- lmSLX(formula = esp1, data = fp_mg.shp@data, listw = w1)
 summary(mod1.slx)
-impacts(mod1.slx)
+summary(impacts(mod1.slx, tr=trMat, R=1000), zstats=TRUE, short=TRUE)
 ```
 
-## SDM
+## SDM (MV)
 
 $y = \rho Wy + X \beta + WX \theta + \varepsilon$
 
 ```{r}
-mod1.sdm <- lagsarlm(formula = esp, data = fp_mg.shp@data, listw = w1, type = "mixed")
+mod1.sdm <- lagsarlm(formula = esp1, data = fp_mg.shp@data, listw = w1, type = "mixed")
 summary(mod1.sdm)
-impacts(mod1.sdm, listw = w1)
+summary(impacts(mod1.sdm, tr=trMat, R=1000), zstats=TRUE, short=TRUE)
 ```
 
-## SDEM
+## SDEM (MV)
 
 $y = X \beta + WX \theta + u \\ u = \lambda Wu + \varepsilon$
 
 ```{r}
-mod1.sdem <- errorsarlm(formula = esp, data = fp_mg.shp@data, listw = w1, etype = "emixed")
+mod1.sdem <- errorsarlm(formula = esp1, data = fp_mg.shp@data, listw = w1, etype = "emixed")
 summary(mod1.sdem)
 ```
+
+## SMA (MV)
+
+$y = X \beta + u \\ u = \lambda W \varepsilon + \varepsilon$
+
+```{r}
+mod1.sma <- spautolm(formula = esp1, data = fp_mg.shp@data, listw = w1, family = "SMA")
+summary(mod1.sma)
+```
+
 

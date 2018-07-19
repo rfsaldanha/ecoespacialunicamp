@@ -68,6 +68,9 @@ library(spdep)
 w1 <- nb2listw(poly2nb(fp_mg.shp, queen = TRUE))
 summary(w1)
 
+# Matriz queen 2ª ordem
+w1.2 <- nb2listw(nblag_cumul(nblag(poly2nb(fp_mg.shp, queen = TRUE), maxlag = 2)))
+
 # Matrix queen padronizada na linha
 w1.w <- nb2listw(poly2nb(fp_mg.shp, queen=TRUE), style="W")
 summary(w1.w)
@@ -157,12 +160,13 @@ moran.mc(fp_mg.shp@data$Q, listw = w5, nsim = 999)
 
 ```{r}
 geary.test(fp_mg.shp@data$Q, listw = w5)
+geary.mc(fp_mg.shp@data$Q, listw = w5, nsim = 999)
 ```
 
 ### G de Getis-Ord
 
 ```{r}
-globalG.test(fp_mg.shp@data$Q, listw = w5)
+globalG.test(as.vector(scale(fp_mg.shp@data$Q, center = FALSE)), listw = w5, B1correct = TRUE)
 ```
 
 ## Autocorrelação espacial local
@@ -182,7 +186,8 @@ lm1 <- localmoran(fp_mg.shp@data$Q, listw = w5)
 summary(lm1)
 
 # Quantos são significativos?
-table(lm1<0.05)
+lm1 <- as.data.frame(lm1)
+table(lm1$`Pr(z > 0)`<0.05)
 ```
 
 ## Diagrama de dispersão de Moran
@@ -209,27 +214,26 @@ Rode o código abaixo.
 lisaplot <- function(shapefile, values, listw, pval = 0.05){
   require(spdep)
   
-  svalues <- scale(values)
+  svalues <- as.vector(scale(values, scale = FALSE))
   lag_svalues <- spdep::lag.listw(listw, svalues)
   locm <- spdep::localmoran(values, listw)
-  sig <- rep(5, length(values))
+  sig <- rep(0, length(values))
   
   sig[(svalues >= 0 & lag_svalues >= 0) & (locm[,5] <= pval)] <- 1
   sig[(svalues <= 0 & lag_svalues <= 0) & (locm[,5] <= pval)] <- 2
   sig[(svalues >= 0 & lag_svalues <= 0) & (locm[,5] <= pval)] <- 3
-  sig[(svalues >= 0 & lag_svalues <= 0) & (locm[,5] <= pval)] <- 4
-  sig[(svalues <= 0 & lag_svalues >= 0) & (locm[,5] <= pval)] <- 5
+  sig[(svalues <= 0 & lag_svalues >= 0) & (locm[,5] <= pval)] <- 4
+  sig[locm[,5] > pval] <- 5
   
   breaks <- seq(1, 5, 1)
   labels <- c("Alto-Alto", "Baixo-Baixo", "Alto-Baixo", "Baixo-Alto", "N. Sig.")
   np <- findInterval(sig, breaks)
   colors <- c("red", "blue", "lightpink", "skyblue2", "white")
-  plot(shapefile, col = colors[np])  #colors[np] manually sets the color for each county
+  plot(shapefile, col = colors[np])
   mtext("LISA", cex = 1.5, side = 3, line = 1)
   legend("topleft", legend = labels, fill = colors, bty = "n")
 }
 
-lisaplot(fp_mg.shp, fp_mg.shp@data$R, w5)
 ```
 
 E o LISA para a variável `TEMP`.
