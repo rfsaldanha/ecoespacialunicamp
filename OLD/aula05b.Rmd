@@ -1,0 +1,209 @@
+---
+title: "Econometria espacial com R - Aula 05"
+author: "Raphael Saldanha, Eduardo Almeida"
+subtitle: Unicamp, julho de 2018
+output:
+  html_document: default
+  html_notebook: default
+  pdf_document: default
+---
+
+# Painel espacial
+
+## Pacotes
+
+O pacote `plm` é responsável pelos painéis convencionais (não espaciais) que usaremos para comparação. O pacote `splm` é responsável pelos painéis espaciais. Os autores do pacote lançaram um artigo sobre ele neste [link](https://www.jstatsoft.org/article/view/v047i01/v47i01.pdf).
+
+```{r}
+library(plm)
+library(splm)
+```
+
+## Shapefile
+
+```{r}
+# Pacotes
+library(rgdal)
+
+guarda.shp <- readOGR("data", "guarda", encoding = "ISO-8859-1")
+
+# Plotar o mapa
+plot(guarda.shp)
+```
+
+## Dados
+
+Uma olhada nos dados.
+
+```{r}
+str(guarda.shp@data)
+head(guarda.shp@data)
+```
+
+## Filtrando dados
+
+Vamos separar algumas variáveis para usarmos no modelo
+
+```{r}
+dados <- guarda.shp@data
+dados <- subset(dados, select=c("CODMUN6", "TCVPA00", "TCVPA10","RENDA00", "RENDA10", "THEIL00","THEIL10"))
+```
+
+## Matriz de vizinhança
+
+Para rodar os paineis espaciais, vamos precisar de uma matriz de vizinhança.
+
+```{r}
+w1 <- nb2listw(poly2nb(guarda.shp, queen = TRUE))
+summary(w1)
+```
+
+## Variáveis defasadas espacialmente
+
+```{r}
+dados$LAGTCVPA00 <- lag.listw(w1, dados$TCVPA00)
+dados$LAGTCVPA10 <- lag.listw(w1, dados$TCVPA10)
+dados$LAGRENDA00 <- lag.listw(w1, dados$RENDA00)
+dados$LAGRENDA10 <- lag.listw(w1, dados$RENDA10)
+dados$LAGTHEIL00 <- lag.listw(w1, dados$THEIL00)
+dados$LAGTHEIL10 <- lag.listw(w1, dados$THEIL10)
+```
+
+## Empilhar dados
+
+Para empilhar os dados de modo automático, vamos precisar que a base de dados tenha uma organização básica.
+
+* O primeiro campo deve ser o de identificação;
+* Os nomes das variáveis devem conter a especificação da variável e o ano, algo como "PIB2000" e "PIB2010".
+* Não devem existir outras variáveis além da identificação e dados do painel.
+
+Vejamos a base de dados do exemplo.
+
+```{r}
+names(dados)
+```
+
+Para colocar os dados em painel, criamos uma função. Veja abaixo.
+
+```{r}
+painel <- function(id, dados){
+  require(reshape2)
+  
+  dadosp <- reshape2::melt(dados, id=id)
+  dadosp$varname <- as.character(gsub("[[:digit:]]", "", dadosp$variable))
+  dadosp$year <-  as.character(gsub("[[:alpha:]]", "", dadosp$variable))
+  
+  sp <- split(dadosp, f = dadosp$varname)
+  
+  dadosp <- data.frame(sp[[1]][,1], sp[[1]]$year)
+  
+  for(i in 1:length(sp)){
+    dadosp <- cbind(dadosp, sp[[i]]$value)
+  }
+  
+  names(dadosp) <- c("id","ano",names(sp)) 
+  
+  return(dadosp)
+}
+```
+
+Depois de declarada, vamos colocar os dados em painel.
+
+```{r}
+dadosp <- painel("CODMUN6", dados)
+View(dadosp)
+```
+
+## Especificação do modelo
+
+```{r}
+esp <- TCVPA ~ RENDA + THEIL
+```
+
+## Modelo não espacial de efeitos fixos
+
+```{r}
+fe <- plm(esp, data=dadosp)
+```
+
+## Modelo não espacial de efeitos aleatórios
+
+```{r}
+re <- plm(esp, data=dadosp, model="random")
+```
+
+## Teste de Hausman
+
+```{r}
+ph <- phtest(fe, re) # H0: efeitos aleatórios
+print(ph)
+```
+
+## Teste Pesaran CD (cross-section dependence)
+
+```{r}
+cd <- pcdtest(esp, data=dadosp) # H0: ausência de dependência CS
+print(cd)
+```
+
+## Modelo OLS
+
+```{r}
+modOLS <- plm(esp, data=dadosp)
+summary(modOLS)
+```
+
+## SAR
+
+```{r}
+modSAR <- spml(esp, data=dadosp, listw=w1, lag=TRUE, model="within", effect="individual", spatial.error="none")
+summary(modSAR)
+impSAR <- impacts(modSAR, listw=w1, time=2)
+summary(impSAR, zstats=TRUE, short=TRUE)
+```
+
+## SEM
+
+```{r}
+modSEM <- spml(esp, data=dadosp, listw=w1, lag=FALSE, model="within", effect="individual", spatial.error="b")
+summary(modSEM)
+```
+
+## SAC
+
+```{r}
+modSAC <- spml(esp, data=dadosp, listw=w1, lag=TRUE, model="within", effect="individual", spatial.error="b")
+summary(modSAC)
+impSAC <- impacts(modSAC, listw=w1, time=2)
+summary(impSAC, zstats=TRUE, short=TRUE)
+```
+
+## Especificação com lag
+
+```{r}
+esp_lag <- TCVPA ~ LAGRENDA + LAGTHEIL
+```
+
+## SDM
+
+```{r}
+modSDM <- spml(esp_lag, data=dadosp, listw=w1, lag=TRUE, model="within", effect="individual", spatial.error="none")
+summary(modSDM)
+impSDM <- impacts(modSDM, listw=w1, time=12)
+summary(impSDM, zstats=TRUE, short=TRUE)
+```
+
+## SDEM
+
+```{r}
+modSDEM <- spml(esp_lag, data=dadosp, listw=w1, lag=FALSE, model="within", effect="individual", spatial.error="b")
+summary(modSDEM)
+```
+
+## SLX
+
+```{r}
+modSLX <- plm(esp_lag, data=dadosp, model = "within", spatial.error = "none", lag = FALSE)
+summary(modSLX)
+```
+

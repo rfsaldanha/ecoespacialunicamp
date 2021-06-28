@@ -1,0 +1,184 @@
+---
+title: "Econometria espacial com R - Aula 03"
+author: "Raphael Saldanha, Eduardo Almeida"
+subtitle: Unicamp, julho de 2018
+output:
+  html_document: default
+  html_notebook: default
+  pdf_document: default
+---
+
+# Modelos espaciais
+
+## Pacote
+
+```{r}
+library(spatialreg)
+library(spdep)
+```
+
+
+
+## Shapefile
+
+```{r}
+# Pacotes
+library(rgdal)
+
+# Abra o arquivo 'gm10.shp'
+fp_mg.shp <- readOGR("data", "FP_MG", encoding = "UTF-8")
+
+# Plotar o mapa
+plot(fp_mg.shp)
+```
+
+```{r}
+library(leaflet)
+library(RColorBrewer)
+library(htmltools)
+
+qpal<-colorQuantile("OrRd", fp_mg.shp@data$VPP, n=5) 
+
+leaflet(fp_mg.shp) %>%
+  addPolygons(stroke = FALSE, fillOpacity = .8, smoothFactor = 0.2,
+              fillColor = ~qpal(VPP), popup = ~htmlEscape(NOMMIC),
+              highlight = highlightOptions(fillOpacity = 0.5,
+                                           bringToFront = TRUE)) %>%
+  addTiles()
+```
+
+
+
+## Matriz de vizinhança
+
+```{r}
+w1 <- spdep::nb2listw(spdep::poly2nb(fp_mg.shp, queen = TRUE))
+W <- as(w1, "CsparseMatrix")
+trMat <- trW(W, type="mult")
+```
+
+
+## Especificação do modelo
+
+```{r}
+esp1 <- VPP ~ LP + KP + ACP
+esp2 <- VPP ~ LP + KP + R_P
+```
+
+## OLS
+
+$y = \alpha + X\beta + \varepsilon$
+
+```{r}
+mod1.mcrl <- lm(formula = esp1, data = fp_mg.shp@data)
+summary(mod1.mcrl)
+```
+
+## Multiplicador de Lagrange
+
+```{r}
+mod1.lagrange <- lm.LMtests(model = mod1.mcrl, listw = w1,
+                            test = c("LMerr","RLMerr","LMlag","RLMlag",
+                            "SARMA"))
+mod1.lagrange
+```
+
+## SAR (MV)
+
+$y = \rho W y + X \beta + \varepsilon$
+
+```{r}
+mod1.sar <- lagsarlm(formula = esp1, data = fp_mg.shp@data, listw = w1)
+summary(mod1.sar)
+summary(impacts(mod1.sar, tr=trMat, R=1000), zstats=TRUE, short=TRUE)
+```
+
+## SEM (MV)
+
+$y = X \beta + u \\ u = \lambda Wu + \varepsilon$
+
+```{r}
+mod1.sem <- errorsarlm(formula = esp1, data = fp_mg.shp@data, listw = w1)
+summary(mod1.sem)
+```
+
+## SEM (GMM)
+
+```{r}
+mod1.semGMM <- GMerrorsar(formula = esp1, data = fp_mg.shp@data, listw = w1)
+summary(mod1.semGMM)
+```
+
+
+## SAC (MV)
+
+$y = \rho Wy + X \beta + u \\ u = \lambda Wu + \varepsilon$
+
+```{r}
+mod1.sac <- sacsarlm(formula = esp1, data = fp_mg.shp@data, listw = w1)
+summary(mod1.sac)
+summary(impacts(mod1.sac, tr=trMat, R=1000), zstats=TRUE, short=TRUE)
+```
+
+## SAC (GMM)
+
+```{r}
+mod1.sacGMM <- gstsls(formula = esp1, data = fp_mg.shp@data, listw = w1)
+summary(mod1.sacGMM)
+summary(impacts(mod1.sacGMM, tr=trMat, R=1000), zstats=TRUE, short=TRUE)
+```
+
+
+
+## SLX (MV)
+
+$y = X \beta + WX \theta + \varepsilon$
+
+```{r}
+mod1.slx <- lmSLX(formula = esp1, data = fp_mg.shp@data, listw = w1)
+summary(mod1.slx)
+summary(impacts(mod1.slx, tr=trMat, R=1000), zstats=TRUE, short=TRUE)
+```
+
+## SDM (MV)
+
+$y = \rho Wy + X \beta + WX \theta + \varepsilon$
+
+```{r}
+mod1.sdm <- lagsarlm(formula = esp1, data = fp_mg.shp@data, listw = w1, type = "mixed")
+summary(mod1.sdm)
+summary(impacts(mod1.sdm, tr=trMat, R=1000), zstats=TRUE, short=TRUE)
+```
+
+## SDEM (MV)
+
+$y = X \beta + WX \theta + u \\ u = \lambda Wu + \varepsilon$
+
+```{r}
+mod1.sdem <- errorsarlm(formula = esp1, data = fp_mg.shp@data, listw = w1, etype = "emixed")
+summary(mod1.sdem)
+```
+
+## SMA (MV)
+
+$y = X \beta + u \\ u = \lambda W \varepsilon + \varepsilon$
+
+```{r}
+mod1.sma <- spautolm(formula = esp1, data = fp_mg.shp@data, listw = w1, family = "SMA")
+summary(mod1.sma)
+```
+
+# Testes
+
+## Teste de razão de MV
+
+```{r}
+mod1.sar.mixed <- lagsarlm(formula = esp1, data = fp_mg.shp@data, listw = w1, type = "mixed")
+mod1.sem <- errorsarlm(formula = esp1, data = fp_mg.shp@data, listw = w1)
+
+LR.sarlm(mod1.sar.mixed, mod1.sem)
+LR.sarlm(mod1.sdm, mod1.mcrl)
+LR.sarlm(mod1.sdem, mod1.mcrl)
+```
+
+
