@@ -1,4 +1,5 @@
 #### Pasta de trabalho
+setwd("geocode/")
 
 #### Pacote
 library(httr)
