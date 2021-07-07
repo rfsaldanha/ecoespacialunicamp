@@ -1,7 +1,7 @@
 ---
 title: "Econometria espacial com R - Matrizes"
 author: "Raphael Saldanha, Eduardo Almeida"
-subtitle: "Unicamp, junho de 2021"
+subtitle: "Unicamp, julho de 2021"
 ---
 
 # Análise Exploratória de Dados Espaciais

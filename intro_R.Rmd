@@ -98,7 +98,7 @@ log(1)
 No chunk abaixo, cálcule a raiz quadrada do logaritmo de 10
 
 ```{r}
-
+sqrt(x = log(x = 10))
 ```
 
 Resultado correto: 1,51.
