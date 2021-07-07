@@ -1,7 +1,7 @@
 #### Pacote
 #devtools::install_github("dkahle/ggmap")
 library(ggmap)
-register_google(key = "AIzaSyB28h_cqf9flJDWybxLaPAg4V1NjDGqtcY")
+register_google(key = "sua_chave")
 
 # Geocodificar um único endereço
 res <- geocode("Rua Camaragibe 9 - Tijuca - Rio de Janeiro - Brasil - CEP 20520130")

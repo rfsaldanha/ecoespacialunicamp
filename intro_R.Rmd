@@ -70,7 +70,7 @@ Se tudo correu bem, você deve ver acima o resultado das operações. Use o prev
 No chunk abaixo, realize a operação $((2+3(5))/10)^2$
 
 ```{r}
-
+((2+3*5)/10)^2
 ```
 
 Resultado correto: 2,89.
@@ -98,7 +98,7 @@ log(1)
 No chunk abaixo, cálcule a raiz quadrada do logaritmo de 10
 
 ```{r}
-sqrt(x = log(x = 10))
+sqrt(log(x = 10))
 ```
 
 Resultado correto: 1,51.
@@ -150,7 +150,8 @@ notas
 Crie um objeto chamado **dados** com os valores {5, 7, 12.7, 13, 15}. Eleve ao quadrado e obtenha o resultado da soma dos valores elevados com a função `sum(x)`.
 
 ```{r}
-
+dados <- c(5, 7, 12.7, 13, 15)
+sum(dados^2)
 ```
 
 Resultado correto: 629,29.
@@ -164,7 +165,7 @@ Estes operados verificam afirmações de lógica, veja os comandos abaixo.
 2 == 2
 2 == 5
 "a" == "a"
-"a" == "A"
+"a" == 'A'
 
 # Maior
 2 > 3
@@ -220,7 +221,8 @@ dados$nota
 Importe o mesmo arquivo do exemplo mas com o argumento `header = FALSE`. Execute o comando `str(x)` e veja o que mudou.
 
 ```{r}
-
+dados <- read.csv2(file = "data/notas.csv", header = TRUE)
+str(dados)
 ```
 
 # Estatísticas básicas
@@ -273,10 +275,11 @@ hist(dados$nota, main = "Boxplot", xlab = "Classes", ylab = "Frequências", col 
 O comando `normal <- rnorm(1000)` cria um objeto chamado **normal** com mil valores aleatórios obtidos à partir de uma distribuição normal $N(0,1)$. Verifique a média e o desvio padrão deste objeto e crie um histograma.
 
 ```{r}
-normal <- rnorm(1000)
+normal <- rnorm(1000, mean = 10, sd = 5)
+mean(normal)
+sd(normal)
 
-
-
+hist(normal)
 ```
 
 
