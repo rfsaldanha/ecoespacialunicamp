@@ -1,0 +1,254 @@
+---
+title: "Econometria espacial com R - Modelos de cross section"
+author: "Raphael Saldanha, Eduardo Almeida"
+subtitle: Unicamp, julho de 2021
+output:
+  html_document: default
+  html_notebook: default
+  pdf_document: default
+---
+
+# Modelos espaciais de cross section
+
+## Pacote
+
+```{r}
+library(spatialreg)
+library(spdep)
+library(sphet)
+```
+
+
+
+## Shapefile
+
+```{r}
+# Pacotes
+library(rgdal)
+
+# Abra o arquivo
+montana.shp <- readOGR("data/natregimes_montana.gml")
+
+# Plotar o mapa
+plot(montana.shp)
+```
+
+```{r}
+library(leaflet)
+library(RColorBrewer)
+library(htmltools)
+
+qpal<-colorQuantile("OrRd", montana.shp@data$RD90, n=5) 
+
+leaflet(montana.shp) %>%
+  addPolygons(stroke = FALSE, fillOpacity = .8, smoothFactor = 0.2,
+              fillColor = ~qpal(RD90), popup = ~htmlEscape(NAME),
+              highlight = highlightOptions(fillOpacity = 0.5,
+                                           bringToFront = TRUE)) %>%
+  addTiles()
+```
+
+
+
+## Matriz de vizinhança
+
+```{r}
+w1 <- spdep::nb2listw(spdep::poly2nb(montana.shp, queen = FALSE), style = "W")
+W <- as(w1, "CsparseMatrix")
+trMat <- trW(W, type="mult")
+```
+
+
+## Especificação do modelo
+
+```{r}
+esp1 <- HR90 ~ RD90
+endog <- ~ UE90
+instruments <- ~ FH90
+```
+
+* HR: homicide rate per 100,000 (1960, 1970, 1980, 1990)
+* RD: resource deprivation 1960, 1970, 1980, 1990 (principal component)
+* UE: unemployment rate 1960, 1970, 1980, 1990
+* FH: % female headed households 1960, 1970, 1980, 1990
+
+## OLS
+
+$y = \alpha + X\beta + \varepsilon$
+
+```{r}
+mod1.mcrl <- lm(formula = esp1, data = montana.shp@data)
+summary(mod1.mcrl)
+```
+
+## Multiplicador de Lagrange
+
+```{r}
+mod1.lagrange <- lm.LMtests(model = mod1.mcrl, listw = w1,
+                            test = c("LMerr","RLMerr","LMlag","RLMlag",
+                            "SARMA"))
+mod1.lagrange
+```
+
+## SAR (MV)
+
+$y = \rho W y + X \beta + \varepsilon$
+
+```{r warning=FALSE}
+mod1.sar <- lagsarlm(formula = esp1, data = montana.shp@data, listw = w1)
+summary(mod1.sar)
+summary(spdep::impacts(mod1.sar, tr=trMat, R=1000), zstats=TRUE, short=TRUE)
+```
+
+## SAC (STSLS)
+
+```{r warning=FALSE}
+mod1.sac_stsls <- spreg(
+  formula = esp1, data = montana.shp@data, listw = w1,
+  model = "lag", het = TRUE, endog = endog, instruments = instruments
+)
+summary(mod1.sac_stsls)
+```
+
+```{r warning=FALSE}
+mod1.sac_stsls2 <- spreg(
+  formula = esp1, data = montana.shp@data, listw = w1,
+  model = "lag", het = TRUE
+)
+summary(mod1.sac_stsls2)
+
+summary(sphet::impacts(mod1.sac_stsls2, tr=trMat, R=1000), zstats=TRUE, short=TRUE)
+```
+
+
+## SEM (MV)
+
+$y = X \beta + u \\ u = \lambda Wu + \varepsilon$
+
+```{r warning=FALSE}
+mod1.sem <- errorsarlm(formula = esp1, data = montana.shp@data, listw = w1)
+summary(mod1.sem)
+```
+
+## SEM (GMM)
+
+```{r warning=FALSE}
+mod1.sem_gmm <- spreg(
+  formula = esp1, data = montana.shp@data, listw = w1,
+  model = "error", step1.c = TRUE, het = TRUE, endog = endog, instruments = instruments
+)
+
+summary(mod1.sem_gmm)
+```
+
+
+## SAC (MV)
+
+$y = \rho Wy + X \beta + u \\ u = \lambda Wu + \varepsilon$
+
+```{r warning=FALSE}
+mod1.sac <- sacsarlm(formula = esp1, data = montana.shp@data, listw = w1)
+summary(mod1.sac)
+summary(spdep::impacts(mod1.sac, tr=trMat, R=1000), zstats=TRUE, short=TRUE)
+```
+
+## SAC (GMM)
+
+```{r}
+mod1.sac_gmm <- spreg(
+  formula = esp1, data = montana.shp@data, listw = w1,
+  model = "sarar", step1.c = FALSE, het = TRUE, endog = endog, instruments = instruments
+)
+
+summary(mod1.sac_gmm)
+```
+
+```{r}
+mod1.sac_gmm2 <- spreg(
+  formula = esp1, data = montana.shp@data, listw = w1,
+  model = "sarar", step1.c = FALSE, het = TRUE
+)
+
+summary(mod1.sac_gmm2)
+summary(sphet::impacts(mod1.sac_gmm2, tr=trMat, R=1000), zstats=TRUE, short=TRUE)
+```
+
+
+
+## SLX (MV)
+
+$y = X \beta + WX \theta + \varepsilon$
+
+```{r warning=FALSE}
+mod1.slx <- lmSLX(formula = esp1, data = montana.shp@data, listw = w1)
+summary(mod1.slx)
+summary(spdep::impacts(mod1.slx, tr=trMat, R=1000), zstats=TRUE, short=TRUE)
+```
+
+## SLX (STSLS)
+
+```{r}
+mod1.slx_stsls <- spreg(
+  formula = esp1, data = montana.shp@data, listw = w1,
+  lag.instr = FALSE, Durbin = TRUE, model = "ols", step1.c = TRUE, 
+  het = TRUE, endog = endog, instruments = instruments
+)
+
+summary(mod1.slx_stsls)
+```
+
+
+```{r}
+mod1.slx_stsls2 <- spreg(
+  formula = esp1, data = montana.shp@data, listw = w1,
+  lag.instr = FALSE, Durbin = TRUE, model = "ols", step1.c = TRUE, 
+  het = TRUE
+)
+
+summary(sphet::impacts(mod1.slx_stsls2, tr=trMat, R=1000), zstats=TRUE, short=TRUE)
+```
+
+
+## SDM (MV)
+
+$y = \rho Wy + X \beta + WX \theta + \varepsilon$
+
+```{r warning=FALSE}
+mod1.sdm <- lagsarlm(formula = esp1, data = montana.shp@data, listw = w1, Durbin = TRUE)
+summary(mod1.sdm)
+summary(spdep::impacts(mod1.sdm, tr=trMat, R=1000), zstats=TRUE, short=TRUE)
+```
+
+## SDEM (MV)
+
+$y = X \beta + WX \theta + u \\ u = \lambda Wu + \varepsilon$
+
+```{r warning=FALSE}
+mod1.sdem <- errorsarlm(formula = esp1, data = montana.shp@data, listw = w1, Durbin = TRUE)
+summary(mod1.sdem)
+```
+
+## SDEM (GMM)
+
+```{r}
+mod1.sdem_gmm <- spreg(
+  formula = esp1, data = montana.shp@data, listw = w1,
+  model = "error", Durbin = TRUE, 
+  step1.c = TRUE, het = TRUE, endog = endog, instruments = instruments
+)
+
+summary(mod1.sdem_gmm)
+```
+
+```{r}
+mod1.sdem_gmm2 <- spreg(
+  formula = esp1, data = montana.shp@data, listw = w1,
+  model = "error", Durbin = TRUE, 
+  step1.c = TRUE, het = TRUE
+)
+
+summary(mod1.sdem_gmm2)
+
+summary(sphet::impacts(mod1.sdem_gmm2, tr=w_matrix$tr, R=1000), zstats=TRUE, short=TRUE)
+```
+

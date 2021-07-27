@@ -16,6 +16,7 @@ library(rgdal)
 
 # Abra o arquivo 'gm10.shp'
 fp_mg.shp <- readOGR("data", "FP_MG", encoding = "ISO-8859-1")
+# encoding = "UTF-8"
 
 # Plotar o mapa
 plot(fp_mg.shp)
@@ -34,7 +35,7 @@ head(fp_mg.shp@data)
 Podemos produzir um mapa colorido com os seguintes comandos.
 
 ```{r}
-p <- colorRampPalette(c("white", "orange"))(128)
+p <- colorRampPalette(c("white", "blue"))(128)
 palette(p)
 plot(fp_mg.shp, col = fp_mg.shp@data$Q)
 ```
@@ -86,7 +87,7 @@ summary(w2.c)
 coords <- coordinates(fp_mg.shp)
 nb <- dnearneigh(coords, 0, 1000)
 dlist <- nbdists(nb, coords)
-dlist <- lapply(dlist, function(x) 1/x)
+dlist <- lapply(dlist, function(x) 1/x^2)
 w3 <- nb2listw(nb, glist=dlist)
 summary(w3)
 
@@ -171,6 +172,7 @@ globalG.test(as.vector(scale(fp_mg.shp@data$Q, center = FALSE)), listw = w5, B1c
 ```{r}
 lg1 <- localG(fp_mg.shp@data$Q, listw = w5)
 summary(lg1)
+hist(lg1)
 ```
 
 ### I de Moran
@@ -182,7 +184,7 @@ summary(lm1)
 
 # Quantos são significativos?
 lm1 <- as.data.frame(lm1)
-table(lm1$`Pr(z > 0)`<0.05)
+table(lm1$`Pr(z > 0)` < 0.05)
 ```
 
 ## Diagrama de dispersão de Moran
