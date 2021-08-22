@@ -1,0 +1,314 @@
+---
+title: "Econometria espacial com R - Painéis de dados espaciais"
+author: "Raphael Saldanha, Eduardo Almeida"
+subtitle: Unicamp, agosto de 2021
+output:
+  html_document: default
+  html_notebook: default
+  pdf_document: default
+---
+
+## Pacotes
+
+O pacote `plm` é responsável pelos painéis convencionais (não espaciais) que usaremos para comparação. O pacote `splm` é responsável pelos painéis espaciais. Os autores do pacote lançaram um artigo sobre ele neste [link](https://www.jstatsoft.org/article/view/v047i01/v47i01.pdf).
+
+```{r}
+library(spatialreg)
+library(plm)
+library(splm)
+```
+
+## Shapefile
+
+```{r}
+# Pacotes
+library(rgdal)
+
+natregimes_montana.shp <- readOGR("data/natregimes_montana.gml")
+
+# Plotar o mapa
+plot(natregimes_montana.shp)
+```
+
+## Dados
+
+Uma olhada nos dados.
+
+```{r}
+str(natregimes_montana.shp@data)
+head(natregimes_montana.shp@data)
+```
+
+### Filtrando dados
+
+Vamos separar algumas variáveis para usarmos no modelo
+
+```{r}
+dados <- natregimes_montana.shp@data
+dados <- subset(dados, select=c("POLY_ID", "HR90", "HR80", "RD90", "RD80","UE90", "UE80"))
+```
+
+## Matriz de vizinhança
+
+Para rodar os paineis espaciais, vamos precisar de uma matriz de vizinhança.
+
+```{r}
+w1 <- nb2listw(poly2nb(natregimes_montana.shp, queen = TRUE))
+summary(w1)
+```
+
+### Variáveis defasadas espacialmente
+
+```{r}
+dados$lag_HR90 <- lag.listw(w1, dados$HR90)
+dados$lag_HR80 <- lag.listw(w1, dados$HR80)
+dados$lag_RD90 <- lag.listw(w1, dados$RD90)
+dados$lag_RD80 <- lag.listw(w1, dados$RD80)
+dados$lag_UE90 <- lag.listw(w1, dados$UE90)
+dados$lag_UE80 <- lag.listw(w1, dados$UE80)
+```
+
+## Empilhar dados
+
+Para empilhar os dados de modo automático, vamos precisar que a base de dados tenha uma organização básica.
+
+* O primeiro campo deve ser o de identificação;
+* Os nomes das variáveis devem conter a especificação da variável e o ano, algo como "PIB2000" e "PIB2010".
+* Não devem existir outras variáveis além da identificação e dados do painel.
+
+Vejamos a base de dados do exemplo.
+
+```{r}
+names(dados)
+```
+
+Para colocar os dados em painel, criamos uma função. Veja abaixo.
+
+```{r}
+painel <- function(id, dados){
+  require(reshape2)
+  
+  dadosp <- reshape2::melt(dados, id=id)
+  dadosp$varname <- as.character(gsub("[[:digit:]]", "", dadosp$variable))
+  dadosp$year <-  as.character(gsub("[[:alpha:]]", "", dadosp$variable))
+  
+  sp <- split(dadosp, f = dadosp$varname)
+  
+  dadosp <- data.frame(sp[[1]][,1], sp[[1]]$year)
+  
+  for(i in 1:length(sp)){
+    dadosp <- cbind(dadosp, sp[[i]]$value)
+  }
+  
+  names(dadosp) <- c("id","ano",names(sp)) 
+  
+  return(dadosp)
+}
+```
+
+Depois de declarada, vamos colocar os dados em painel.
+
+```{r}
+dadosp <- painel("POLY_ID", dados)
+# View(dadosp)
+```
+
+### Verifica se o painél é balanceado
+
+```{r}
+is.pbalanced(dadosp)
+```
+
+
+## Especificação do modelo
+
+```{r}
+esp <- HR ~ RD + UE
+```
+
+
+## Testes
+
+### Teste de Hausman
+
+```{r}
+fe <- plm(esp, data = dadosp)
+re <- plm(esp, data = dadosp, model = "random")
+ph <- phtest(fe, re) # H0: efeitos aleatórios
+print(ph)
+```
+
+### Teste espacial de Hausman
+
+```{r warning=FALSE}
+error_type <- "b"
+    
+sar_random <- spml(esp, data = dadosp, listw = w1, lag = TRUE, model = "random", effect = "individual", spatial.error = "none")
+    
+sar_fixed <- spml(esp, data = dadosp, listw = w1, lag = TRUE, model = "within", effect = "individual", spatial.error = "none")
+    
+sem_random <- spml(esp, data = dadosp, listw = w1, lag = FALSE, model = "random", effect = "individual", spatial.error = error_type)
+    
+sem_fixed <- spml(esp, data = dadosp, listw = w1, lag = FALSE, model = "within", effect = "individual", spatial.error = error_type)
+    
+sac_random <- spml(esp, data = dadosp, listw = w1, lag = TRUE, model = "random", effect = "individual", spatial.error = error_type)
+    
+sac_fixed <- spml(esp, data = dadosp, listw = w1, lag = TRUE, model = "within", effect = "individual", spatial.error = error_type)
+    
+test_sar <- sphtest(sar_random, sar_fixed)
+test_sem <- sphtest(sem_random, sem_fixed)
+test_sac <- sphtest(sac_random, sac_fixed)
+    
+res <- cbind(
+  c(test_sar$statistic, test_sar$p.value),
+  c(test_sem$statistic, test_sem$p.value),
+  c(test_sac$statistic, test_sac$p.value)
+)
+
+dimnames(res) <- list(c("test", "p-value"), c("SAR","SEM","SAC"))
+round(x = res, digits = 5)
+```
+
+
+
+### Teste Pesaran CD (cross-section dependence)
+
+```{r}
+cd <- pcdtest(esp, data = dadosp) # H0: ausência de dependência CS
+print(cd)
+```
+
+### Teste BSK
+
+```{r}
+res_lmh <- bsktest(esp, data = dadosp, listw = w1, test = "LMH")
+res_lm1 <- bsktest(esp, data = dadosp, listw = w1, test = "LM1")
+res_lm2 <- bsktest(esp, data = dadosp, listw = w1, test = "LM2")
+res_clm_mu <- bsktest(esp, data = dadosp, listw = w1, test = "CLMmu")
+res_clm_lambda <- bsktest(esp, data = dadosp, listw = w1, test = "CLMlambda")
+
+res <- cbind(
+  c(res_lmh$statistic, res_lmh$p.value),
+  c(res_lm1$statistic, res_lm1$p.value),
+  c(res_lm2$statistic, res_lm2$p.value),
+  c(res_clm_mu$statistic, res_clm_mu$p.value),
+  c(res_clm_lambda$statistic, res_clm_lambda$p.value)
+)
+
+dimnames(res) <- list(c("test", "p-value"), c("LM joint","LM mu","LM lambda", "CLM mu", "CLM lambda"))
+round(x = res, digits = 5)
+```
+
+### Teste BSJK
+
+```{r}
+res_c1 <- bsjktest(esp, data = dadosp, listw = w1, test = "C.1")
+res_c2 <- bsjktest(esp, data = dadosp, listw = w1, test = "C.2")
+res_c3 <- bsjktest(esp, data = dadosp, listw = w1, test = "C.3")
+res_j <- bsjktest(esp, data = dadosp, listw = w1, test = "J")
+
+res <- cbind(
+  c(res_c1$statistic, res_c1$p.value),
+  c(res_c2$statistic, res_c2$p.value),
+  c(res_c3$statistic, res_c3$p.value),
+  c(res_j$statistic, res_j$p.value)
+)
+
+dimnames(res) <- list(c("test", "p-value"), c("C.1","C.2","C.3", "J"))
+round(x = res, digits = 5)
+```
+
+## Modelos
+
+### OLS
+
+```{r}
+modOLS <- plm(esp, data=dadosp)
+summary(modOLS)
+```
+
+### SAR (ML)
+
+```{r warning=FALSE}
+modSAR <- spml(esp, data = dadosp, listw = w1, lag = TRUE, model = "within", effect = "individual", spatial.error = "none")
+summary(modSAR)
+impSAR <- impacts(modSAR, listw = w1, time = 2)
+summary(impSAR, zstats=TRUE, short=TRUE)
+```
+
+### SAR (GM)
+
+```{r warning=FALSE}
+modSAR_gm <- spgm(esp, data = dadosp, listw = w1, lag = TRUE, spatial.error = FALSE, model = "within", moments = "weights", endog = NULL, instruments = NULL)
+
+summary(modSAR_gm)
+
+summary(splm:::impacts.splm(modSAR_gm, listw = w1, time = 2))
+```
+
+
+### SEM (ML)
+
+```{r warning=FALSE}
+modSEM <- spml(esp, data = dadosp, listw = w1, lag = FALSE, model = "within", effect = "individual", spatial.error = "b")
+summary(modSEM)
+```
+
+### SEM (GM)
+
+```{r}
+modSEM_gm <- spgm(esp, data = dadosp, listw = w1, lag = FALSE, spatial.error = TRUE, model = "within", moments = "weights", endog = NULL, instruments = NULL)
+
+summary(modSEM_gm)
+```
+
+
+### SAC (ML)
+
+```{r warning=FALSE}
+modSAC <- spml(esp, data = dadosp, listw = w1, lag = TRUE, model = "within", effect = "individual", spatial.error = "b")
+summary(modSAC)
+impSAC <- impacts(modSAC, listw = w1, time = 2)
+summary(impSAC, zstats=TRUE, short=TRUE)
+```
+
+### SAC (GM)
+
+```{r warning=FALSE}
+modSAC_gm <- spgm(esp, data = dadosp, listw = w1, lag = TRUE, spatial.error = TRUE, model = "within", moments = "weights", endog = NULL, instruments = NULL)
+
+summary(modSAC_gm)
+
+summary(splm:::impacts.splm(modSAC_gm, listw = w1, time = 2))
+```
+
+
+### Especificação com lag
+
+```{r}
+esp_lag <- HR ~ lag_RD + lag_UE
+```
+
+### SDM (ML)
+
+```{r warning=FALSE}
+modSDM <- spml(esp_lag, data = dadosp, listw = w1, lag = TRUE, model = "within", effect = "individual", spatial.error = "none")
+summary(modSDM)
+impSDM <- impacts(modSDM, listw = w1, time = 2)
+summary(impSDM, zstats=TRUE, short=TRUE)
+```
+
+### SDEM (ML)
+
+```{r warning=FALSE}
+modSDEM <- spml(esp_lag, data = dadosp, listw = w1, lag = FALSE, model = "within", effect = "individual", spatial.error = "b")
+summary(modSDEM)
+```
+
+### SLX (ML)
+
+```{r warning=FALSE}
+modSLX <- plm(esp_lag, data = dadosp, model = "within", spatial.error = "none", lag = FALSE)
+summary(modSLX)
+```
+

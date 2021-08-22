@@ -1,0 +1,79 @@
+---
+title: "Importando matrizes de pesos espaciais"
+author: "Raphael Saldanha, Eduardo Almeida"
+subtitle: Unicamp, agosto de 2021
+output:
+  html_document: default
+  html_notebook: default
+  pdf_document: default
+---
+
+## Shapefile
+
+```{r}
+# Pacotes
+library(rgdal)
+
+tvpaga.shp <- readOGR("data", "tvpaga4", encoding = "ISO-8859-1")
+
+# Plotar o mapa
+plot(tvpaga.shp)
+```
+
+# Importar matriz criada no Geoda
+
+Matrizes criadas no Geoda através de polígonos de Voronoi.
+
+```{r}
+library(spdep)
+
+queen_nb <- read.gal(file = "data/tvpaga_queen.gal")
+queen_w <- nb2listw(neighbours = queen_nb, style = "W")
+
+rook_nb <- read.gal(file = "data/tvpaga_rook.gal")
+rook_w <- nb2listw(neighbours = rook_nb, style = "W")
+```
+
+## Teste da importação
+
+```{r}
+summary(queen_nb)
+summary(rook_nb)
+```
+
+
+```{r}
+moran.test(x = tvpaga.shp@data$GIN, listw = queen_w)
+moran.test(x = tvpaga.shp@data$GIN, listw = rook_w)
+```
+
+## Criando os polígonos no R
+
+```{r}
+library(dismo)
+
+coordenadas <- coordinates(obj = tvpaga.shp)
+
+tvpaga_voronoi <- voronoi(xy = coordenadas)
+
+plot(tvpaga_voronoi)
+```
+
+### Matriz
+
+```{r}
+# Matriz queen
+w1 <- nb2listw(poly2nb(tvpaga_voronoi, queen = TRUE), style = "W")
+```
+
+### Comparação
+
+```{r}
+moran.test(x = tvpaga.shp@data$GIN, listw = queen_w)
+```
+
+```{r}
+moran.test(x = tvpaga.shp@data$GIN, listw = w1)
+```
+
+

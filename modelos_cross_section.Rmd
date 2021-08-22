@@ -85,8 +85,7 @@ summary(mod1.mcrl)
 
 ```{r}
 mod1.lagrange <- lm.LMtests(model = mod1.mcrl, listw = w1,
-                            test = c("LMerr","RLMerr","LMlag","RLMlag",
-                            "SARMA"))
+                            test = c("LMerr","RLMerr","LMlag","RLMlag"))
 mod1.lagrange
 ```
 
